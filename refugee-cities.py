@@ -129,24 +129,64 @@ def find_cities(
     for extra_filter in extra_filters:
         closest_cities = closest_cities.query(extra_filter)
 
-    closest_cities = closest_cities.sort_values("population", ascending=False).head(20)
+    closest_cities = closest_cities.sort_values("population", ascending=False).head(60)
 
     if not os.path.exists("output"):
         os.mkdir("output")
 
     closest_cities.to_csv("output/closest_cities.txt")
 
-    routes = []
-    for _, city_data in closest_cities.iterrows():
+    import itertools
+    destinations = []
+    iterrows = closest_cities.iterrows()
+    with open("output/distance_matrix.json", "w") as matrix_file:
+        while True:
+            rows = list(itertools.islice(iterrows, 20))
+            if not rows:
+                break
+
+            destination_set = [
+                {
+                    "name": city_data.asciiname,
+                    "location": (city_data.latitude, city_data.longitude),
+                }
+                for _, city_data in rows
+            ]
+
+            dest_locations = [destination["location"] for destination in destination_set]
+
+            destinations.extend(destination_set)
+
+            distances = gmaps.distance_matrix(
+                origins=loc, destinations=dest_locations,
+                mode="driving", language="en", units="metric",
+            )
+
+            json.dump(distances, matrix_file)
+            matrix_file.write("\n")
+
+            for destination, address, distance, in zip(
+                    destination_set,
+                    distances["destination_addresses"],
+                    distances["rows"][0]["elements"]
+            ):
+                destination["address"] = address
+                destination["distance"] = distance.get("distance", {"text": "NA", "value": 999999})
+                destination["duration"] = distance.get("duration", {"text": "NA", "value": 999999})
+    sorted_destinations = list(sorted(destinations, key=lambda obj: obj["duration"]["value"]))[0:20]
+
+    for destination in sorted_destinations:
         directions_result = gmaps.directions(
             (start_lat, start_lon),
-            (city_data.latitude, city_data.longitude),
+            destination["location"],
             mode="driving")
-        routes.append(directions_result)
+        destination["route"] = directions_result
 
     with open('output/routes.json', 'w') as f:
-        f.write(json.dumps(routes))
-
+        f.write(json.dumps({
+            destination['name']: destination['route']
+            for destination in sorted_destinations
+        }))
 
     # mapping and shape utils
     import folium
@@ -160,17 +200,16 @@ def find_cities(
     start_m.add_to(map)
 
     # Plot conflict starting points
-    for kk, loc in closest_cities.iterrows():
-        loc_m = folium.Marker([loc.latitude, loc.longitude], popup=loc['name'],
+    for destination in sorted_destinations:
+        loc_m = folium.Marker(destination["location"], popup=destination["name"],
                               icon=folium.Icon(icon='glyphicon glyphicon-home', color='blue'))
         loc_m.add_to(map)
 
-    # Plot most likely refugee movement based on closest camp
-    for route in routes:
+        route = destination["route"]
         distance = route[0]['legs'][0]['distance']['text']
         duration = route[0]['legs'][0]['duration']['text']
-        # tooltip = f"Travel between <b>{kk}</b> and <b>{vv}</b> by car is <b>{distance}</b> and takes <b>{duration}</b>."
-        tooltip = f"Travel by car is <b>{distance}</b> and takes <b>{duration}</b>"
+        tooltip = f"Travel between <b>{start_lat} {start_lon}</b> and <b>{destination.get('name', 'N/A')}" \
+                  f"</b> by car is <b>{distance}</b> and takes <b>{duration}</b>."
         polyline_ = polyline.decode(route[0]['overview_polyline']['points'])
         polyline_m = folium.PolyLine(polyline_, color='blue', tooltip=tooltip, weight=5)
         polyline_m.add_to(map)
