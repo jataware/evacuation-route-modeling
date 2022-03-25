@@ -1,11 +1,12 @@
 import argparse
 from enum import Enum
+import itertools
 import json
+import math
 import os
 
 import geopandas as gpd
 import pandas as pd
-import math
 import numpy as np
 import shapely
 from shapely.geometry import Point
@@ -14,9 +15,10 @@ import pgeocode
 import pyproj
 import polyline
 
+
 class TravelModes(Enum):
-    Driving = "DRIVING"
-    Walking = "WALKING"
+    Driving = "driving"
+    Walking = "walking"
 
 CITY_FILE = "cities1000.txt"
 
@@ -38,7 +40,7 @@ def find_cities(
         start_lon,
         disaster_radius_km,
         flight_radius_km,
-        travel_mode="DRIVING",
+        travel_mode=TravelModes.Driving.value,
         extra_filters=[],
 ):
     AEQD_STR = pyproj.Proj(f"+proj=aeqd +units=km +lat_0={start_lat} +lon_0={start_lon}")
@@ -136,7 +138,6 @@ def find_cities(
 
     closest_cities.to_csv("output/closest_cities.txt")
 
-    import itertools
     destinations = []
     iterrows = closest_cities.iterrows()
     with open("output/distance_matrix.json", "w") as matrix_file:
@@ -159,7 +160,7 @@ def find_cities(
 
             distances = gmaps.distance_matrix(
                 origins=loc, destinations=dest_locations,
-                mode="driving", language="en", units="metric",
+                mode=travel_mode, language="en", units="metric",
             )
 
             json.dump(distances, matrix_file)
@@ -179,7 +180,7 @@ def find_cities(
         directions_result = gmaps.directions(
             (start_lat, start_lon),
             destination["location"],
-            mode="driving")
+            mode=travel_mode)
         destination["route"] = directions_result
 
     with open('output/routes.json', 'w') as f:
@@ -195,6 +196,16 @@ def find_cities(
     # Create Map
     map = folium.Map(location=[start_lat, start_lon], zoom_start=7)
 
+    # Add evacuation area
+    evacuation_area = folium.vector_layers.Circle(
+        location=[start_lat, start_lon],
+        radius=disaster_radius_km * 1000,
+        color="#ff8888",
+        fill=True,
+        fill_opacity=0.3,
+    )
+    evacuation_area.add_to(map)
+
     start_m = folium.Marker([start_lat, start_lon], popup=(start_lat, start_lon),
                             icon=folium.Icon(icon='glyphicon glyphicon-fire', color='darkred'))
     start_m.add_to(map)
@@ -208,8 +219,9 @@ def find_cities(
         route = destination["route"]
         distance = route[0]['legs'][0]['distance']['text']
         duration = route[0]['legs'][0]['duration']['text']
+        travel_mode_desc = "by car" if travel_mode == TravelModes.Driving else "by foot"
         tooltip = f"Travel between <b>{start_lat} {start_lon}</b> and <b>{destination.get('name', 'N/A')}" \
-                  f"</b> by car is <b>{distance}</b> and takes <b>{duration}</b>."
+                  f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
         polyline_ = polyline.decode(route[0]['overview_polyline']['points'])
         polyline_m = folium.PolyLine(polyline_, color='blue', tooltip=tooltip, weight=5)
         polyline_m.add_to(map)
@@ -253,8 +265,8 @@ if __name__ == "__main__":
         "--travel-mode",
         type=str,
         help="Sets the name of the file that is output",
-        choices=list(TravelModes.__members__.keys()),
-        default='Driving',
+        choices=[travel_mode.value for travel_mode in TravelModes.__members__.values()],
+        default=TravelModes.Driving.value,
     )
     arg_parser.add_argument(
         "--extra-filters",
@@ -268,6 +280,6 @@ if __name__ == "__main__":
         start_lon=args.start_lon,
         disaster_radius_km=args.disaster_radius_km,
         flight_radius_km=args.flight_radius_km,
-        travel_mode=TravelModes[args.travel_mode],
+        travel_mode=args.travel_mode,
         extra_filters=json.loads(args.extra_filters),
     )
