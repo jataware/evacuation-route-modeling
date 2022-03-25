@@ -12,12 +12,25 @@ from shapely.geometry import Point
 import googlemaps
 import pgeocode
 import pyproj
+import polyline
 
 class TravelModes(Enum):
     Driving = "DRIVING"
     Walking = "WALKING"
 
 CITY_FILE = "cities1000.txt"
+
+
+def get_directions(start, end):
+    '''
+    This function takes in a start and end location from `mlocations.csv`
+    and obtains the Google Directions for them.
+    '''
+    directions_result = googlemaps.directions(
+        (start.latitude, start.longitude),
+        (end.latitude, end.longitude),
+        mode="driving")
+    return directions_result
 
 
 def find_cities(
@@ -32,6 +45,7 @@ def find_cities(
     EPSG_STR = "EPSG:4326"
 
     googlemaps_key = os.environ.get("GOOGLEMAPS_KEY")
+    gmaps = googlemaps.Client(key=googlemaps_key)
 
     # Used to "quickly" limit distance to a certain bounding box so we're not comparing distances for every city on Earth
     # Not particularly accurate, but good enough for the purpose
@@ -122,7 +136,48 @@ def find_cities(
 
     closest_cities.to_csv("output/closest_cities.txt")
 
+    routes = []
+    for _, city_data in closest_cities.iterrows():
+        directions_result = gmaps.directions(
+            (start_lat, start_lon),
+            (city_data.latitude, city_data.longitude),
+            mode="driving")
+        routes.append(directions_result)
 
+    with open('output/routes.json', 'w') as f:
+        f.write(json.dumps(routes))
+
+
+    # mapping and shape utils
+    import folium
+    from folium import plugins
+
+    # Create Map
+    map = folium.Map(location=[start_lat, start_lon], zoom_start=7)
+
+    start_m = folium.Marker([start_lat, start_lon], popup=(start_lat, start_lon),
+                            icon=folium.Icon(icon='glyphicon glyphicon-fire', color='darkred'))
+    start_m.add_to(map)
+
+    # Plot conflict starting points
+    for kk, loc in closest_cities.iterrows():
+        loc_m = folium.Marker([loc.latitude, loc.longitude], popup=loc['name'],
+                              icon=folium.Icon(icon='glyphicon glyphicon-home', color='blue'))
+        loc_m.add_to(map)
+
+    # Plot most likely refugee movement based on closest camp
+    for route in routes:
+        distance = route[0]['legs'][0]['distance']['text']
+        duration = route[0]['legs'][0]['duration']['text']
+        # tooltip = f"Travel between <b>{kk}</b> and <b>{vv}</b> by car is <b>{distance}</b> and takes <b>{duration}</b>."
+        tooltip = f"Travel by car is <b>{distance}</b> and takes <b>{duration}</b>"
+        polyline_ = polyline.decode(route[0]['overview_polyline']['points'])
+        polyline_m = folium.PolyLine(polyline_, color='blue', tooltip=tooltip, weight=5)
+        polyline_m.add_to(map)
+
+    # Add fullscreen button
+    plugins.Fullscreen().add_to(map)
+    map.save("output/routes.html")
 
 
 if __name__ == "__main__":
