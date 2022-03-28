@@ -136,6 +136,8 @@ def find_cities(
 
     if not os.path.exists("output"):
         os.mkdir("output")
+    if not os.path.exists("media"):
+        os.mkdir("media")
 
     closest_cities.to_csv("output/closest_cities.txt")
 
@@ -267,7 +269,7 @@ def find_cities(
             )
     # Add fullscreen button
     plugins.Fullscreen().add_to(map)
-    map.save("output/routes.html")
+    map.save("media/routes.html")
 
     with open("output/route_data.csv", "w") as output_datafile:
         output_csv = csv.writer(output_datafile, dialect="unix")
