@@ -1,4 +1,5 @@
 import argparse
+import csv
 from enum import Enum
 import itertools
 import json
@@ -211,6 +212,8 @@ def find_cities(
                             icon=folium.Icon(icon='glyphicon glyphicon-fire', color='darkred'))
     start_m.add_to(map)
 
+    output_dataset = []
+
     # Plot conflict starting points
     for destination in sorted_destinations:
         route = destination["route"][0]
@@ -240,9 +243,50 @@ def find_cities(
                                      popup=folium.Popup(popup_html))
         polyline_m.add_to(map)
 
+        total_duration = 0
+        total_distance = 0
+        for i, step in enumerate(leg["steps"]):
+            total_distance += step["distance"]["value"]
+            total_duration += step["duration"]["value"]
+            output_dataset.append(
+                [
+                    destination["name"],
+                    destination['location'][0],
+                    destination['location'][1],
+                    i,
+                    step["distance"]["value"],
+                    total_distance,
+                    step["duration"]["value"],
+                    total_duration,
+                    step["start_location"]["lat"],
+                    step["start_location"]["lng"],
+                    step["end_location"]["lat"],
+                    step["end_location"]["lng"],
+                    step["html_instructions"]
+                ],
+            )
     # Add fullscreen button
     plugins.Fullscreen().add_to(map)
     map.save("output/routes.html")
+
+    with open("output/route_data.csv", "w") as output_datafile:
+        output_csv = csv.writer(output_datafile, dialect="unix")
+        output_csv.writerow([
+            "destination",
+            "destination_latitude",
+            "destination_longitude",
+            "step_num",
+            "step_distance_meters",
+            "running_total_distance_meters",
+            "step_duration_seconds",
+            "running_total_duration_seconds",
+            "start_latitude",
+            "start_longitude",
+            "end_latitude",
+            "end_longitude",
+            "html_instructions",
+        ])
+        output_csv.writerows(output_dataset)
 
 
 if __name__ == "__main__":
