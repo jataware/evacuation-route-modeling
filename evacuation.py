@@ -198,11 +198,12 @@ def find_cities(
 
     # Add evacuation area
     evacuation_area = folium.vector_layers.Circle(
-        location=[start_lat, start_lon],
+        location=(start_lat, start_lon),
         radius=disaster_radius_km * 1000,
         color="#ff8888",
         fill=True,
         fill_opacity=0.3,
+        popup=f"Evacuation distance: {disaster_radius_km} km"
     )
     evacuation_area.add_to(map)
 
@@ -212,18 +213,31 @@ def find_cities(
 
     # Plot conflict starting points
     for destination in sorted_destinations:
-        loc_m = folium.Marker(destination["location"], popup=destination["name"],
-                              icon=folium.Icon(icon='glyphicon glyphicon-home', color='blue'))
-        loc_m.add_to(map)
-
-        route = destination["route"]
-        distance = route[0]['legs'][0]['distance']['text']
-        duration = route[0]['legs'][0]['duration']['text']
+        route = destination["route"][0]
+        leg = route['legs'][0]
+        distance = leg['distance']['text']
+        duration = leg['duration']['text']
         travel_mode_desc = "by car" if travel_mode == TravelModes.Driving else "by foot"
         tooltip = f"Travel between <b>{start_lat} {start_lon}</b> and <b>{destination.get('name', 'N/A')}" \
                   f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
-        polyline_ = polyline.decode(route[0]['overview_polyline']['points'])
-        polyline_m = folium.PolyLine(polyline_, color='blue', tooltip=tooltip, weight=5)
+
+        popup_html = (
+            f'''
+            <div style="min-width: 400px">
+                <h3>Travel to {destination["name"]} {travel_mode_desc}</h3>
+                Total travel time: <b>{duration}</b><br/>
+                Total travel distance: <b>{distance}</b>
+            </div>
+            '''
+        )
+
+        loc_m = folium.Marker(destination["location"], popup=folium.Popup(popup_html),
+                              icon=folium.Icon(icon='glyphicon glyphicon-home', color='blue'))
+        loc_m.add_to(map)
+
+        polyline_ = polyline.decode(route['overview_polyline']['points'])
+        polyline_m = folium.PolyLine(polyline_, color='blue', tooltip=tooltip, weight=5,
+                                     popup=folium.Popup(popup_html))
         polyline_m.add_to(map)
 
     # Add fullscreen button
