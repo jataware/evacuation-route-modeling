@@ -3,16 +3,13 @@ import csv
 from enum import Enum
 import itertools
 import json
-import math
 import os
 
 import geopandas as gpd
 import pandas as pd
-import numpy as np
-import shapely
 from shapely.geometry import Point
 import googlemaps
-import pgeocode
+from haversine import inverse_haversine, Direction
 import pyproj
 import polyline
 
@@ -21,7 +18,38 @@ class TravelModes(Enum):
     Driving = "driving"
     Walking = "walking"
 
-CITY_FILE = "cities1000.txt"
+
+CITY_FILE = "cities5000.txt"
+
+
+def read_geonames_file(file_path):
+    city_df = pd.read_csv(
+        file_path,
+        sep="\t",
+        header=0,
+        names=[
+            "geonameid",
+            "name",
+            "name_ascii",
+            "alternatenames",
+            "latitude",
+            "longitude",
+            "feature class",
+            "feature code",
+            "country code",
+            "cc2",
+            "admin1 code",
+            "admin2 code",
+            "admin3 code",
+            "admin4 code",
+            "population",
+            "elevation",
+            "dem",
+            "timezone",
+            "modification date",
+        ]
+    )
+    return city_df
 
 
 def get_directions(start, end):
@@ -36,88 +64,62 @@ def get_directions(start, end):
     return directions_result
 
 
-def find_cities(
+def find_routes(
         start_lat,
         start_lon,
         disaster_radius_km,
         flight_radius_km,
         travel_mode=TravelModes.Driving.value,
         extra_filters=[],
+        destination_file=None,
+        location_id_col="location_id",
+        latitude_col="latitude",
+        longitude_col="longitude",
 ):
+
+    if destination_file is None:
+        destination_file = CITY_FILE
+
     AEQD_STR = pyproj.Proj(f"+proj=aeqd +units=km +lat_0={start_lat} +lon_0={start_lon}")
     EPSG_STR = "EPSG:4326"
 
     googlemaps_key = os.environ.get("GOOGLEMAPS_KEY")
     gmaps = googlemaps.Client(key=googlemaps_key)
 
-    # Used to "quickly" limit distance to a certain bounding box so we're not comparing distances for every city on Earth
-    # Not particularly accurate, but good enough for the purpose
-    def reverse_haversine(start_location, dist_km, direction="N"):
-        dir_lookup = {
-            "N": 0,
-            "E": math.pi/2,
-            "S": math.pi,
-            "W": -math.pi/2,
-        }
-        result = np.radians(start_location)
-        lat, long = result
-        dist = dist_km / pgeocode.EARTH_RADIUS
-        theta = dir_lookup[direction]  # Direction in radians
+    start_loc = (start_lat, start_lon)
 
-        lat2 = math.asin(
-            (math.sin(lat) * math.cos(dist)) + (math.cos(lat) * math.sin(dist) * math.cos(theta))
-        )
-        long2 = (
-            long + math.atan2((math.sin(theta) * math.sin(dist) * math.cos(lat)),
-            (math.cos(dist) - (math.sin(lat) * math.sin(lat2))))
-        )
-
-        return math.degrees(lat2), math.degrees(long2)
-
-    loc = (start_lat, start_lon)
     bounds = {
-        "north": reverse_haversine(loc, flight_radius_km * 2, "N")[0],
-        "east": reverse_haversine(loc, flight_radius_km * 2, "E")[1],
-        "south": reverse_haversine(loc, flight_radius_km * 2, "S")[0],
-        "west": reverse_haversine(loc, flight_radius_km * 2, "W")[1],
+        "north": inverse_haversine(start_loc, flight_radius_km * 2, Direction.NORTH)[0],
+        "east": inverse_haversine(start_loc, flight_radius_km * 2, Direction.EAST)[1],
+        "south": inverse_haversine(start_loc, flight_radius_km * 2, Direction.SOUTH)[0],
+        "west": inverse_haversine(start_loc, flight_radius_km * 2, Direction.WEST)[1],
     }
 
-    city_df = pd.read_csv(
-        CITY_FILE,
-        sep="\t",
-        header=0,
-        names=[
-             "geonameid",
-             "name",
-             "asciiname",
-             "alternatenames",
-             "latitude",
-             "longitude",
-             "feature class",
-             "feature code",
-             "country code",
-             "cc2",
-             "admin1 code",
-             "admin2 code",
-             "admin3 code",
-             "admin4 code",
-             "population",
-             "elevation",
-             "dem",
-             "timezone",
-             "modification date",
-        ]
-    )
+    if destination_file.startswith("cities") and destination_file.endswith(".txt"):
+        destination_df = read_geonames_file(CITY_FILE)
+        location_id_col = "name_ascii"
+    else:
+        destination_df = pd.read_csv(destination_file)
+
+    required_column_set = {location_id_col, latitude_col, longitude_col}
+
+    if set(destination_df.columns).intersection(required_column_set) != required_column_set:
+        raise ValueError(
+            f"Datafile {destination_file} does not include the all required columns: {' '.join(required_column_set)}"
+        )
 
     proj_df = gpd.GeoDataFrame(
-        city_df,
-        geometry=gpd.points_from_xy(city_df.latitude, city_df.longitude),
+        destination_df,
+        geometry=gpd.points_from_xy(destination_df[latitude_col], destination_df[longitude_col]),
         crs=pyproj.CRS(EPSG_STR),
     )
 
     # Quick and dirty filter to filter out most of the cities that are outside the bounds of the area to reduce computation
     proj_df = proj_df.query(
-        f"not (latitude > {bounds['north']} or longitude > {bounds['east']} or latitude < {bounds['south']} or longitude < {bounds['west']})"
+        f"not ("
+            f"{latitude_col} > {bounds['north']} or {longitude_col} > {bounds['east']} "
+            f"or {latitude_col} < {bounds['south']} or {longitude_col} < {bounds['west']}"
+        f")"
     )
 
     transformer = pyproj.Transformer.from_proj(EPSG_STR, AEQD_STR)
@@ -126,13 +128,13 @@ def find_cities(
     proj_df["distance"] = proj_df["geometry"].distance(Point(0, 0))
 
     closest_cities = (
-        proj_df.query(f"distance > {disaster_radius_km} and distance <= {flight_radius_km} and `feature code` != 'PPL'")
+        proj_df.query(f"distance > {disaster_radius_km} and distance <= {flight_radius_km}")
     )
 
     for extra_filter in extra_filters:
         closest_cities = closest_cities.query(extra_filter)
 
-    closest_cities = closest_cities.sort_values("population", ascending=False).head(60)
+    closest_cities = closest_cities.sort_values("distance", ascending=False).head(60)
 
     if not os.path.exists("output"):
         os.mkdir("output")
@@ -151,8 +153,8 @@ def find_cities(
 
             destination_set = [
                 {
-                    "name": city_data.asciiname,
-                    "location": (city_data.latitude, city_data.longitude),
+                    "name": city_data[location_id_col],
+                    "location": (city_data[latitude_col], city_data[longitude_col]),
                 }
                 for _, city_data in rows
             ]
@@ -162,7 +164,7 @@ def find_cities(
             destinations.extend(destination_set)
 
             distances = gmaps.distance_matrix(
-                origins=loc, destinations=dest_locations,
+                origins=start_loc, destinations=dest_locations,
                 mode=travel_mode, language="en", units="metric",
             )
 
@@ -322,6 +324,12 @@ if __name__ == "__main__":
         help="",
     )
     arg_parser.add_argument(
+        "destination_file",
+        nargs="?",
+        type=str,
+        default=None,
+    )
+    arg_parser.add_argument(
         "--travel-mode",
         type=str,
         help="Sets the name of the file that is output",
@@ -333,13 +341,35 @@ if __name__ == "__main__":
         type=str,
         default="[]",
     )
+    arg_parser.add_argument(
+        "--location-id-col",
+        type=str,
+        help="Name of column in dataset that identifies the destination location identifier",
+        default="location_id",
+    )
+    arg_parser.add_argument(
+        "--latitude-col",
+        help="Name of column in dataset that identifies the destination latitude",
+        type=str,
+        default="latitude",
+    )
+    arg_parser.add_argument(
+        "--longitude-col",
+        help="Name of column in dataset that identifies the destination longitude",
+        type=str,
+        default="longitude",
+    )
     args = arg_parser.parse_args()
 
-    find_cities(
+    find_routes(
         start_lat=args.start_lat,
         start_lon=args.start_lon,
         disaster_radius_km=args.disaster_radius_km,
         flight_radius_km=args.flight_radius_km,
         travel_mode=args.travel_mode,
         extra_filters=json.loads(args.extra_filters),
+        destination_file=args.destination_file,
+        location_id_col=args.location_id_col,
+        latitude_col=args.latitude_col,
+        longitude_col=args.longitude_col,
     )

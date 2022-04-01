@@ -1,6 +1,7 @@
 folium
 geopandas
 googlemaps
+haversine
 pgeocode
 polyline
 shapely
