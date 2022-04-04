@@ -17,6 +17,16 @@ import polyline
 class TravelModes(Enum):
     Driving = "driving"
     Walking = "walking"
+    Transit = "transit"
+
+    @classmethod
+    def travel_mode_text(cls, travel_mode):
+        lookup = {
+            cls.Driving.value: "by car",
+            cls.Walking.value: "by foot",
+            cls.Transit.value: "by transit",
+        }
+        return lookup.get(travel_mode, "")
 
 
 CITY_FILE = "cities5000.txt"
@@ -134,7 +144,7 @@ def find_routes(
     for extra_filter in extra_filters:
         closest_cities = closest_cities.query(extra_filter)
 
-    closest_cities = closest_cities.sort_values("distance", ascending=False).head(60)
+    closest_cities = closest_cities.sort_values("distance", ascending=True).head(60)
 
     if not os.path.exists("output"):
         os.mkdir("output")
@@ -217,14 +227,16 @@ def find_routes(
     start_m.add_to(map)
 
     output_dataset = []
+    travel_mode_desc = TravelModes.travel_mode_text(travel_mode)
 
     # Plot conflict starting points
     for destination in sorted_destinations:
+        if not destination["route"]:
+            continue
         route = destination["route"][0]
         leg = route['legs'][0]
         distance = leg['distance']['text']
         duration = leg['duration']['text']
-        travel_mode_desc = "by car" if travel_mode == TravelModes.Driving else "by foot"
         tooltip = f"Travel between <b>{start_lat} {start_lon}</b> and <b>{destination.get('name', 'N/A')}" \
                   f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
 
