@@ -265,6 +265,7 @@ def find_routes(
             destination["location"][1],
             round(destination["duration"]["value"] / 3600, 3),
             round(destination["distance"]["value"] / 1000, 3),
+            travel_mode,
         ])
 
     # Add fullscreen button
@@ -279,6 +280,7 @@ def find_routes(
             "destination_longitude",
             "duration_hrs",
             "distance_km",
+            "travel_mode",
         ])
         output_csv.writerows(output_dataset)
 
