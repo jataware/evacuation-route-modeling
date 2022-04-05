@@ -1,5 +1,6 @@
 import argparse
 import csv
+import datetime
 from enum import Enum
 import itertools
 import json
@@ -153,6 +154,7 @@ def find_routes(
 
     closest_cities.to_csv("output/closest_cities.txt")
 
+    today = datetime.date.today().isoformat()
     destinations = []
     iterrows = closest_cities.iterrows()
     with open("output/distance_matrix.json", "w") as matrix_file:
@@ -260,6 +262,7 @@ def find_routes(
         polyline_m.add_to(map)
 
         output_dataset.append([
+            today,
             destination["name"],
             destination["location"][0],
             destination["location"][1],
@@ -275,6 +278,7 @@ def find_routes(
     with open("output/route_data.csv", "w") as output_datafile:
         output_csv = csv.writer(output_datafile, dialect="unix")
         output_csv.writerow([
+            "date",
             "destination",
             "destination_latitude",
             "destination_longitude",
