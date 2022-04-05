@@ -259,28 +259,14 @@ def find_routes(
                                      popup=folium.Popup(popup_html))
         polyline_m.add_to(map)
 
-        total_duration = 0
-        total_distance = 0
-        for i, step in enumerate(leg["steps"]):
-            total_distance += step["distance"]["value"]
-            total_duration += step["duration"]["value"]
-            output_dataset.append(
-                [
-                    destination["name"],
-                    destination['location'][0],
-                    destination['location'][1],
-                    i,
-                    step["distance"]["value"],
-                    total_distance,
-                    step["duration"]["value"],
-                    total_duration,
-                    step["start_location"]["lat"],
-                    step["start_location"]["lng"],
-                    step["end_location"]["lat"],
-                    step["end_location"]["lng"],
-                    step["html_instructions"]
-                ],
-            )
+        output_dataset.append([
+            destination["name"],
+            destination["location"][0],
+            destination["location"][1],
+            round(destination["duration"]["value"] / 3600, 3),
+            round(destination["distance"]["value"] / 1000, 3),
+        ])
+
     # Add fullscreen button
     plugins.Fullscreen().add_to(map)
     map.save("media/routes.html")
@@ -291,16 +277,8 @@ def find_routes(
             "destination",
             "destination_latitude",
             "destination_longitude",
-            "step_num",
-            "step_distance_meters",
-            "running_total_distance_meters",
-            "step_duration_seconds",
-            "running_total_duration_seconds",
-            "start_latitude",
-            "start_longitude",
-            "end_latitude",
-            "end_longitude",
-            "html_instructions",
+            "duration_hrs",
+            "distance_km",
         ])
         output_csv.writerows(output_dataset)
 
