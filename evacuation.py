@@ -76,8 +76,7 @@ def get_directions(start, end):
 
 
 def find_routes(
-        start_lat,
-        start_lon,
+        start_location,
         disaster_radius_km,
         flight_radius_km,
         travel_mode=TravelModes.Driving.value,
@@ -91,19 +90,21 @@ def find_routes(
     if destination_file is None:
         destination_file = CITY_FILE
 
-    AEQD_STR = pyproj.Proj(f"+proj=aeqd +units=km +lat_0={start_lat} +lon_0={start_lon}")
-    EPSG_STR = "EPSG:4326"
-
     googlemaps_key = os.environ.get("GOOGLEMAPS_KEY")
     gmaps = googlemaps.Client(key=googlemaps_key)
 
-    start_loc = (start_lat, start_lon)
+    place = gmaps.geocode(address=start_location)
+    std_start_location = place[0]["geometry"]["location"]
+    start_position = (std_start_location["lat"], std_start_location["lng"])
+
+    AEQD_STR = pyproj.Proj(f"+proj=aeqd +units=km +lat_0={std_start_location['lat']} +lon_0={std_start_location['lng']}")
+    EPSG_STR = "EPSG:4326"
 
     bounds = {
-        "north": inverse_haversine(start_loc, flight_radius_km * 2, Direction.NORTH)[0],
-        "east": inverse_haversine(start_loc, flight_radius_km * 2, Direction.EAST)[1],
-        "south": inverse_haversine(start_loc, flight_radius_km * 2, Direction.SOUTH)[0],
-        "west": inverse_haversine(start_loc, flight_radius_km * 2, Direction.WEST)[1],
+        "north": inverse_haversine(start_position, flight_radius_km * 2, Direction.NORTH)[0],
+        "east": inverse_haversine(start_position, flight_radius_km * 2, Direction.EAST)[1],
+        "south": inverse_haversine(start_position, flight_radius_km * 2, Direction.SOUTH)[0],
+        "west": inverse_haversine(start_position, flight_radius_km * 2, Direction.WEST)[1],
     }
 
     if destination_file.startswith("cities") and destination_file.endswith(".txt"):
@@ -176,7 +177,7 @@ def find_routes(
             destinations.extend(destination_set)
 
             distances = gmaps.distance_matrix(
-                origins=start_loc, destinations=dest_locations,
+                origins=start_position, destinations=dest_locations,
                 mode=travel_mode, language="en", units="metric",
             )
 
@@ -195,7 +196,7 @@ def find_routes(
 
     for destination in sorted_destinations:
         directions_result = gmaps.directions(
-            (start_lat, start_lon),
+            start_position,
             destination["location"],
             mode=travel_mode)
         destination["route"] = directions_result
@@ -211,11 +212,11 @@ def find_routes(
     from folium import plugins
 
     # Create Map
-    map = folium.Map(location=[start_lat, start_lon], zoom_start=7)
+    map = folium.Map(location=start_position, zoom_start=7)
 
     # Add evacuation area
     evacuation_area = folium.vector_layers.Circle(
-        location=(start_lat, start_lon),
+        location=start_position,
         radius=disaster_radius_km * 1000,
         color="#ff8888",
         fill=True,
@@ -224,7 +225,7 @@ def find_routes(
     )
     evacuation_area.add_to(map)
 
-    start_m = folium.Marker([start_lat, start_lon], popup=(start_lat, start_lon),
+    start_m = folium.Marker(start_position, popup=start_position,
                             icon=folium.Icon(icon='glyphicon glyphicon-fire', color='darkred'))
     start_m.add_to(map)
 
@@ -239,7 +240,7 @@ def find_routes(
         leg = route['legs'][0]
         distance = leg['distance']['text']
         duration = leg['duration']['text']
-        tooltip = f"Travel between <b>{start_lat} {start_lon}</b> and <b>{destination.get('name', 'N/A')}" \
+        tooltip = f"Travel between <b>{std_start_location}</b> and <b>{destination.get('name', 'N/A')}" \
                   f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
 
         popup_html = (
@@ -300,13 +301,8 @@ if __name__ == "__main__":
     )
 
     arg_parser.add_argument(
-        "start_lat",
-        type=float,
-        help="",
-    )
-    arg_parser.add_argument(
-        "start_lon",
-        type=float,
+        "start_location",
+        type=str,
         help="",
     )
     arg_parser.add_argument(
@@ -358,8 +354,7 @@ if __name__ == "__main__":
     args = arg_parser.parse_args()
 
     find_routes(
-        start_lat=args.start_lat,
-        start_lon=args.start_lon,
+        start_location=args.start_location,
         disaster_radius_km=args.disaster_radius_km,
         flight_radius_km=args.flight_radius_km,
         travel_mode=args.travel_mode,
