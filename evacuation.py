@@ -15,6 +15,10 @@ import pyproj
 import polyline
 
 
+def safe(text):
+    return text.replace('`', '&#96;')
+
+
 class TravelModes(Enum):
     Driving = "driving"
     Walking = "walking"
@@ -240,10 +244,12 @@ def find_routes(
         leg = route['legs'][0]
         distance = leg['distance']['text']
         duration = leg['duration']['text']
-        tooltip = f"Travel between <b>{std_start_location}</b> and <b>{destination.get('name', 'N/A')}" \
-                  f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
+        tooltip = safe(
+                f"Travel between <b>{start_location}</b> and <b>{destination.get('name', 'N/A')}"
+                f"</b> {travel_mode_desc} is <b>{distance}</b> and takes <b>{duration}</b>."
+        )
 
-        popup_html = (
+        popup_html = safe(
             f'''
             <div style="min-width: 400px">
                 <h3>Travel to {destination["name"]} {travel_mode_desc}</h3>
