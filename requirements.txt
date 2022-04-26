@@ -6,3 +6,6 @@ pgeocode
 polyline
 shapely
 matplotlib
+numpy
+fuzzywuzzy
+shapely

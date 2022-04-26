@@ -1,0 +1,12 @@
+{
+  "GOOGLEMAPS_KEY": "Your Key",
+  "conflict_country":"Mali",
+  "flight_mode":"driving",
+  "conflict_start":2023,
+  "number_haven_cities":1,
+  "number_conflict_cities":15,
+  "drop_missing_data":false,
+  "added_countries":[],
+  "excluded_countries":[],
+  "percent_of_pop_leaving": 0.1
+}
