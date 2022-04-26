@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from evacuation import find_routes
+from simple_refugee_route_model.evacuation import find_routes
 
 if __name__ == "__main__":
     description = """

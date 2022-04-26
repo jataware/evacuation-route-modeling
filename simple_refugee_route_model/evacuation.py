@@ -34,7 +34,7 @@ class TravelModes(Enum):
         return lookup.get(travel_mode, "")
 
 
-CITY_FILE = "data/cities5000.txt"
+CITY_FILE = "../data/cities5000.txt"
 
 
 def read_geonames_file(file_path):

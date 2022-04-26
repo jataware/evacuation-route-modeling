@@ -2,18 +2,10 @@ import json
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.iolib.smpickle import load_pickle
-import numpy as np
 from fuzzywuzzy import fuzz, process
-from functools import partial
-import geopandas as gpd
-import math
-import shapely
-from shapely.geometry import Point
+
 import googlemaps
-import pgeocode
-import pyproj
-import time
-import requests
+
 import os
 
 # google libraries
