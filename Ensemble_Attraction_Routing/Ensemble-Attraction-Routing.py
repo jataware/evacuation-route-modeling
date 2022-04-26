@@ -544,6 +544,7 @@ if __name__ == "__main__":
                                                               f"{flight_mode}_destination": "destination country",
                                                               f"refugee_estimated_leaving_via_{flight_mode}": "total refugees"})
         # save df
+        reduced_conflicts['total refugees']=reduced_conflicts['total refugees'].round()
         reduced_conflicts.to_csv(f'outputs/{conflict_country}_{flight_mode}_total_refugees.csv', index=False)
 
         country_level_refugee = pd.DataFrame(
