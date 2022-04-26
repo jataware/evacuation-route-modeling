@@ -1,4 +1,3 @@
-
 mkdir inputs
 mkdir outputs
 mkdir maps
