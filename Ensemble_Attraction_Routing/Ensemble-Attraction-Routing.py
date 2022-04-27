@@ -576,7 +576,7 @@ if __name__ == "__main__":
 
         map = add_legend(map)
         # save map
-        map.save(f"maps/{conflict_country}_{flight_mode}_Map.html")
+        map.save(f"maps/Map.html")
 
         # Calculate Recipient Country Refugee Counts
         conflicts = locations[locations["location_type"] == "conflict_zone"]
