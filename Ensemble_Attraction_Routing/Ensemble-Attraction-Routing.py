@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.iolib.smpickle import load_pickle
 from fuzzywuzzy import fuzz, process
-
+import traceback
 import googlemaps
 
 import os
@@ -49,6 +49,10 @@ if __name__ == "__main__":
         conflict_country = config.get("conflict_country", None)
         excluded_countries = config.get("excluded_countries", "")
         added_countries = config.get("added_countries", "")
+        if excluded_countries =="None":
+            excluded_countries=""
+        if added_countries =="None":
+            added_countries=""
         conflict_start = config.get("conflict_start", 2021)
         if conflict_start >2021:
             conflict_start=2021
@@ -338,7 +342,7 @@ if __name__ == "__main__":
                                     if crossing_data not in crossing_locations:
                                         crossing_locations.append(crossing_data)
                 except Exception as e:
-                    print(e)
+                    print(traceback. e)
             if run_with_haven_cities:
                 for kk, camp in camps.iterrows():
                     try:
@@ -362,7 +366,7 @@ if __name__ == "__main__":
                                         if crossing_data not in crossing_locations:
                                             crossing_locations.append(crossing_data)
                     except Exception as e:
-                        print(e)
+                        traceback.print_exc()
 
         crossing_locations_df = pd.DataFrame(
             crossing_locations, columns=["latitude", "longitude", "country"]
@@ -415,10 +419,12 @@ if __name__ == "__main__":
                         directions_result[0]["country"] = xing["country"]
                     except Exception as e:
                         print(e)
+                        traceback.print_exc()
                         directions_result = None
                     all_directions[conflict_name] = directions_result
                 except Exception as e:
                     print(e)
+                    traceback.print_exc()
         with open(
             f"outputs/{conflict_country}_border_crossing_directions_{flight_mode}.json",
             "w",
@@ -610,4 +616,4 @@ if __name__ == "__main__":
 
 
     except Exception as e:
-        print(e)
+        traceback.print_exc()

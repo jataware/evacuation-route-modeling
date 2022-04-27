@@ -72,6 +72,8 @@ def get_closest(loc_lat, loc_lon, targets, mode, attraction_weight, attractions,
         )
         largest_duration=0
         for idx, val in enumerate(results["rows"][0]["elements"]):
+            if val["status"] == "ZERO_RESULTS":
+                continue
             if val["duration"]['value'] > largest_duration:
                 largest_duration=val["duration"]['value']
 
