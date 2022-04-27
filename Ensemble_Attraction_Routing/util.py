@@ -2,6 +2,7 @@ import json
 import numpy as np
 import folium
 import math
+from fuzzywuzzy import fuzz, process
 
 # Helper Encoder for json
 class NpEncoder(json.JSONEncoder):
@@ -54,7 +55,7 @@ basemaps = {
 }
 
 
-def get_closest(loc_lat, loc_lon, targets, mode, attractions, gmaps):
+def get_closest(loc_lat, loc_lon, targets, mode, attraction_weight, attractions, gmaps):
     chunk_size = 25
     list_targets = [
         targets[i : i + chunk_size] for i in range(0, targets.shape[0], chunk_size)
@@ -63,24 +64,34 @@ def get_closest(loc_lat, loc_lon, targets, mode, attractions, gmaps):
     closest_seconds = 100000000000
     closest_loc = None
     for i in list_targets:
+        print(f'running distance matrix {i}')
         results = gmaps.distance_matrix(
             origins=[(loc_lat, loc_lon)],
             destinations=list(tuple(zip(i.latitude, i.longitude))),
             mode=mode,
         )
+        largest_duration=0
+        for idx, val in enumerate(results["rows"][0]["elements"]):
+            if val["duration"]['value'] > largest_duration:
+                largest_duration=val["duration"]['value']
 
         for idx, val in enumerate(results["rows"][0]["elements"]):
             if val["status"] == "ZERO_RESULTS":
                 continue
 
+            # get best matching name of the country in case they are slightly different - if names don't line up we have an issue
+            country, ratio, idx = process.extractOne(i.iloc[idx]["country"], attractions["country"])
+
             attraction = attractions[
-                attractions["country"] == i.iloc[idx]["country"]
+                attractions["country"] == country
             ].predicted_shares.iloc[0]
-            seconds = val["duration"]["value"] * (1 / math.sqrt(attraction))
+
+            seconds = (val["duration"]['value']/largest_duration) * (1 - attraction_weight) + ( 1 / math.sqrt(attraction)) * attraction_weight
             if seconds <= closest_seconds:
                 closest_seconds = seconds
                 closest_loc = i.iloc[idx]
                 output = val
+
     return closest_loc, output
 
 
