@@ -389,13 +389,12 @@ if __name__ == "__main__":
                                             }
 
                                 if crossing_data:
-                                    crossing_locations_df = crossing_locations_df.append(crossing_data,
-                                                                                         ignore_index=True)
+                                    crossing_locations_df = crossing_locations.append(crossing_data)
 
                                 index_v += 1
                 except Exception as e:
-                    print(traceback. e)
-
+                    print(e)
+                    traceback.print_exc()
 
             if run_with_haven_cities:
                 for kk, camp in camps.iterrows():
@@ -427,9 +426,6 @@ if __name__ == "__main__":
             crossing_locations, columns=["latitude", "longitude", "country"]
         )
 
-
-
-
         # city=get_city("Eritrea",0)
         for touching_country in touching_list:
             if touching_country in crossing_locations_df['country'].values:
@@ -450,13 +446,9 @@ if __name__ == "__main__":
                     )
                     print('done with directions')
                     if directions:
+                        crossing_data=None
                         print('directions found ', touching_country)
                         # set crossing data to city as last case ?
-                        crossing_data = {
-                            "latitude": largest_border_country_city["latitude"],
-                            "longitude": largest_border_country_city["longitude"],
-                            "country": largest_border_country_city['country'],
-                        }
                         for idx, i in enumerate(directions[0]["legs"][0]["steps"]):
                             instr = i["html_instructions"]
                             if "Entering" in instr:
