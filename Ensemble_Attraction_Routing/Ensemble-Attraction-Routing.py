@@ -287,19 +287,18 @@ if __name__ == "__main__":
         largest_conflict_cities["location_type"] = "conflict_zone"
 
         # Do the same for camp/haven countries. These will help create more routes to find crossings.
-        if run_with_haven_cities:
-            largest_camp_cities = pd.DataFrame(columns=city_df.columns)
-            for kk, border in border_countries_results.iterrows():
-                filtered_df = city_df[city_df["country code"] == border["country_code"]]
-                filtered_df["country"] = border["country"]
-                filtered_df = filtered_df.sort_values(by="population", ascending=False)
-                largest_camp_cities_f = filtered_df[0:number_haven_cities]
-                largest_camp_cities = largest_camp_cities.append(largest_camp_cities_f)
-            largest_camp_cities["location_type"] = "camp"
+        largest_camp_cities = pd.DataFrame(columns=city_df.columns)
+        for kk, border in border_countries_results.iterrows():
+            filtered_df = city_df[city_df["country code"] == border["country_code"]]
+            filtered_df["country"] = border["country"]
+            filtered_df = filtered_df.sort_values(by="population", ascending=False)
+            largest_camp_cities_f = filtered_df[0:number_haven_cities]
+            largest_camp_cities = largest_camp_cities.append(largest_camp_cities_f)
+        largest_camp_cities["location_type"] = "camp"
 
-            # merge these two df together.
-            for kk, border in largest_camp_cities.iterrows():
-                largest_conflict_cities = largest_conflict_cities.append(border)
+        # merge these two df together.
+        for kk, border in largest_camp_cities.iterrows():
+            largest_conflict_cities = largest_conflict_cities.append(border)
 
             # change column name
         locations = largest_conflict_cities.rename(columns={"name": "#name"})
@@ -318,6 +317,20 @@ if __name__ == "__main__":
 
         # get the crossing locations from all the routes. This is the most compute time.
         print('starting processing routes')
+
+
+        # check if a country is missing a crossing
+        def get_camp_city(country, ind):
+            city_data = camps[camps['country'] == country].iloc[ind][["#name", "country", "latitude", "longitude"]]
+            return city_data
+
+
+        def get_conflict_city(country, ind):
+            city_data = conflicts[conflicts['country'] == country].iloc[ind][
+                ["#name", "country", "latitude", "longitude"]]
+            return city_data
+
+
         crossing_locations = []
         for kk, conflict in conflicts.iterrows():
             for country in touching_list:
@@ -341,8 +354,49 @@ if __name__ == "__main__":
                                     }
                                     if crossing_data not in crossing_locations:
                                         crossing_locations.append(crossing_data)
+                    else:
+                        directions = None
+                        index_v = 0
+                        while directions == None and index_v < 2:
+                            # get largest border and conflict cities for directions.
+                            largest_border_country_city = get_camp_city(country, index_v)
+
+                            directions = gmaps.directions(
+                                f'{conflict["#name"]}, {conflict["country"]}',
+                                f'{largest_border_country_city["#name"]}, {largest_border_country_city["country"]}',
+                                mode=flight_mode,
+                            )
+                            print('done with directions')
+                            if directions:
+                                print('directions found ', country)
+                                # set crossing data to city as last case ?
+                                crossing_data = {
+                                    "latitude": largest_border_country_city["latitude"],
+                                    "longitude": largest_border_country_city["longitude"],
+                                    "country": largest_border_country_city['country'],
+                                }
+                                for idx, i in enumerate(directions[0]["legs"][0]["steps"]):
+                                    instr = i["html_instructions"]
+                                    if "Entering" in instr:
+                                        print('Found entering')
+                                        country_split = instr.split("Entering")[1].split("<")[0]
+                                        ratio = fuzz.ratio(country_split, country)
+                                        if ratio > 80:
+                                            crossing_data = {
+                                                "latitude": i["end_location"]["lat"],
+                                                "longitude": i["end_location"]["lng"],
+                                                "country": f"{country}",
+                                            }
+
+                                if crossing_data:
+                                    crossing_locations_df = crossing_locations_df.append(crossing_data,
+                                                                                         ignore_index=True)
+
+                                index_v += 1
                 except Exception as e:
                     print(traceback. e)
+
+
             if run_with_haven_cities:
                 for kk, camp in camps.iterrows():
                     try:
@@ -368,10 +422,60 @@ if __name__ == "__main__":
                     except Exception as e:
                         traceback.print_exc()
 
+
         crossing_locations_df = pd.DataFrame(
             crossing_locations, columns=["latitude", "longitude", "country"]
         )
 
+
+
+
+        # city=get_city("Eritrea",0)
+        for touching_country in touching_list:
+            if touching_country in crossing_locations_df['country'].values:
+                pass
+            else:
+                print(touching_country, 'touching country border crossing missing')
+                directions = None
+                index_v = 0
+                while directions == None and index_v < 2:
+                    # get largest border and conflict cities for directions.
+                    largest_border_country_city = get_camp_city(touching_country, index_v)
+                    largest_conflict_country_city = get_conflict_city(conflict_country, index_v)
+
+                    directions = gmaps.directions(
+                        f'{largest_conflict_country_city["#name"]}, {largest_conflict_country_city["country"]}',
+                        f'{largest_border_country_city["#name"]}, {largest_border_country_city["country"]}',
+                        mode=flight_mode,
+                    )
+                    print('done with directions')
+                    if directions:
+                        print('directions found ', touching_country)
+                        # set crossing data to city as last case ?
+                        crossing_data = {
+                            "latitude": largest_border_country_city["latitude"],
+                            "longitude": largest_border_country_city["longitude"],
+                            "country": largest_border_country_city['country'],
+                        }
+                        for idx, i in enumerate(directions[0]["legs"][0]["steps"]):
+                            instr = i["html_instructions"]
+                            if "Entering" in instr:
+                                print('Found entering')
+                                country_split = instr.split("Entering")[1].split("<")[0]
+                                ratio = fuzz.ratio(country_split, touching_country)
+                                if ratio > 80:
+                                    crossing_data = {
+                                        "latitude": i["end_location"]["lat"],
+                                        "longitude": i["end_location"]["lng"],
+                                        "country": f"{touching_country}",
+                                    }
+
+                        if crossing_data:
+                            crossing_locations_df = crossing_locations_df.append(crossing_data, ignore_index=True)
+
+                        index_v += 1
+
+        crossing_locations_df.to_csv(f'outputs/{conflict_country}_border_crossings.csv')
         # get conflict exit routes
         conflict_exit_routes = {}
         NoneType = type(None)
@@ -458,7 +562,7 @@ if __name__ == "__main__":
         # plot crossings
         map = folium.Map(location=[conflicts.latitude.mean(), conflicts.longitude.mean()], zoom_start=6)
 
-        for i, crossing in enumerate(crossing_locations):
+        for i, crossing in crossing_locations_df.iterrows():
             crossing_m = folium.Marker(
                 [crossing["latitude"], crossing["longitude"]],
                 popup=f'{crossing["country"]}_crossing',
