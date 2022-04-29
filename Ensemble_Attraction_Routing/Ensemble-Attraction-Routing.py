@@ -63,8 +63,6 @@ if __name__ == "__main__":
         number_conflict_cities = config.get("number_conflict_cities", 20)
         percent_of_pop_leaving = config.get("percent_of_pop_leaving", 0.1)
         attraction_weight=config.get("attraction_weight",.5)
-        run_with_haven_cities=config.get("run_with_haven_cities",False)
-        # run without haven cities to find crossings
 
         # read in country border data
         country_border = open("../data/country_border_data.json")
