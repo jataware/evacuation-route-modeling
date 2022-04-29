@@ -55,3 +55,5 @@ The first one is {conflict_country}_{flight_mode}_output_results.csv. In my exam
 All json files that are outputed are data on directions and duration times.
 ### Maps
 Each model run has an output map. This map should plot each conflict city, each border crossing found, and the route chosen from each conflict city given the conditions. For the example it looks like this. 
+
+![Map Output](../Ukraine_Driving_Map_Image.png)
