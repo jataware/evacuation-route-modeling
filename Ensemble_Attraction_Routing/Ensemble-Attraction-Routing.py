@@ -405,7 +405,11 @@ if __name__ == "__main__":
                     print(e)
                     traceback.print_exc()
 
-
+        with open(
+            f"outputs/{conflict_country}_conflict_city_to_haven_crossing_via_{flight_mode}.json",
+            "w",
+        ) as f:
+            f.write(json.dumps(conflict_city_to_haven_crossings))
         conflicts_longest_duration_values = {}
         longest_duration = 0
         for kk, conflict in conflicts.iterrows():
@@ -420,7 +424,11 @@ if __name__ == "__main__":
                     pass
             conflicts_longest_duration_values[conflict["#name"]] = longest_duration
 
-
+        with open(
+                f"outputs/{conflict_country}_longest_duration_to_haven_crossing_via_{flight_mode}.json",
+                "w",
+        ) as f:
+            f.write(json.dumps(conflicts_longest_duration_values))
         all_directions = {}
 
         for kk, conflict in conflicts.iterrows():
@@ -556,30 +564,7 @@ if __name__ == "__main__":
                         polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
                         polyline_m.add_to(fg_d)
             fg_d.add_to(map)
-        if "walking" in flight_mode:
-            fg_w = folium.FeatureGroup("Walking")
-            for kk, vv in all_directions.items():
-                stroke = int(conflicts[conflicts["#name"] == kk]["stroke"])
-                population = "{:,}".format(
-                    int(conflicts[conflicts["#name"] == kk]["population"])
-                )
-                directions = all_directions[kk]
-                if not isinstance(directions, type(None)):
-                    distance = all_directions[kk]['final_distance']
-                    duration = all_directions[kk]['final_duration']
-                    end_location = all_directions[kk]['destination_country']
-                    end_country=end_location
-                    final_ind = all_directions[kk]["final_ind"]
-                    tooltip = (
-                        f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by foot is <b>"
-                        f"{distance}</b> and takes <b>{duration}</b>.</br></br>"
-                        f"<b>{population}</b> people are effected by this conflict."
-                    )
-                    for step in directions['legs'][0]['steps'][0:final_ind + 1]:
-                        polyline_ = polyline.decode(step['polyline']['points'])
-                        polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
-                        polyline_m.add_to(fg_w)
-            fg_w.add_to(map)
+
 
         if "transit" in flight_mode:
             fg_t = folium.FeatureGroup("Transit")
