@@ -348,7 +348,7 @@ if __name__ == "__main__":
                             instr = i['html_instructions']
                             if 'Entering' in instr:
                                 country_split = instr.split('Entering')[1].split("<")[0]
-                                ratio = fuzz.ratio(country_split, country)
+                                ratio = fuzz.token_set_ratio(country_split, country)
                                 if ratio > 80:
                                     final_ind = idx
                                     final_duration = total_duration
@@ -385,7 +385,7 @@ if __name__ == "__main__":
                                     instr = i['html_instructions']
                                     if 'Entering' in instr:
                                         country_split = instr.split('Entering')[1].split("<")[0]
-                                        ratio = fuzz.ratio(country_split, country)
+                                        ratio = fuzz.token_set_ratio(country_split, country)
                                         if ratio > 80:
                                             final_ind = idx
                                             final_duration = total_duration
