@@ -5,6 +5,7 @@ from statsmodels.iolib.smpickle import load_pickle
 from fuzzywuzzy import fuzz, process
 import traceback
 import googlemaps
+import math
 
 import os
 
@@ -38,7 +39,6 @@ if __name__ == "__main__":
         help="Path to json config file. (E.g.: config.json)",
     )
     args = arg_parser.parse_args()
-    print(args)
     config_file = args.config_file
     config: dict = json.load(open(config_file))
     print(config)
@@ -59,10 +59,10 @@ if __name__ == "__main__":
         conflict_start=conflict_start-1
         drop_missing_data = config.get("drop_missing_data", False)
         flight_mode = config.get("flight_mode", "driving")
-        number_haven_cities = config.get("number_haven_cities", 1)
-        number_conflict_cities = config.get("number_conflict_cities", 15)
+        number_haven_cities = config.get("number_haven_cities", 5)
+        number_conflict_cities = config.get("number_conflict_cities", 20)
         percent_of_pop_leaving = config.get("percent_of_pop_leaving", 0.1)
-        attraction_weight=config.get("attraction_weight",1)
+        attraction_weight=config.get("attraction_weight",.5)
         run_with_haven_cities=config.get("run_with_haven_cities",False)
         # run without haven cities to find crossings
 
@@ -79,7 +79,6 @@ if __name__ == "__main__":
             indexed_list[i] = c
 
         if len(excluded_countries) > 0:
-            print(excluded_countries)
             if "," in excluded_countries:
                 excluded_countries = excluded_countries.split(',')
             else:
@@ -318,45 +317,56 @@ if __name__ == "__main__":
         # get the crossing locations from all the routes. This is the most compute time.
         print('starting processing routes')
 
-
-        # check if a country is missing a crossing
+        #
+        # # check if a country is missing a crossing
         def get_camp_city(country, ind):
             city_data = camps[camps['country'] == country].iloc[ind][["#name", "country", "latitude", "longitude"]]
             return city_data
+        #
+        #
+        # def get_conflict_city(country, ind):
+        #     city_data = conflicts[conflicts['country'] == country].iloc[ind][
+        #         ["#name", "country", "latitude", "longitude"]]
+        #     return city_data
 
+        conflict_city_to_haven_crossings = []
 
-        def get_conflict_city(country, ind):
-            city_data = conflicts[conflicts['country'] == country].iloc[ind][
-                ["#name", "country", "latitude", "longitude"]]
-            return city_data
-
-
-        crossing_locations = []
         for kk, conflict in conflicts.iterrows():
             for country in touching_list:
                 try:
                     result = gmaps.directions(
                         f'{conflict["#name"]}, {conflict["country"]}',
                         country,
-                        mode="driving",
+                        mode=flight_mode,
                     )
                     if result:
-                        for idx, i in enumerate(result[0]["legs"][0]["steps"]):
-                            instr = i["html_instructions"]
-                            if "Entering" in instr:
-                                country_split = instr.split("Entering")[1].split("<")[0]
+
+                        total_duration = 0
+                        total_distance = 0
+                        final_ind = None
+                        for idx, i in enumerate(result[0]['legs'][0]['steps']):
+                            total_duration = total_duration + i["duration"]["value"]
+                            total_distance = total_distance + i["distance"]["value"]
+                            instr = i['html_instructions']
+                            if 'Entering' in instr:
+                                country_split = instr.split('Entering')[1].split("<")[0]
                                 ratio = fuzz.ratio(country_split, country)
                                 if ratio > 80:
-                                    crossing_data = {
-                                        "latitude": i["end_location"]["lat"],
-                                        "longitude": i["end_location"]["lng"],
-                                        "country": f"{country}",
-                                    }
-                                    if crossing_data not in crossing_locations:
-                                        crossing_locations.append(crossing_data)
+                                    final_ind = idx
+                                    final_duration = total_duration
+                                    final_distance = total_distance
+                                    conflict_city_to_haven_crossings.append({conflict["#name"]: {"final_ind": final_ind,
+                                                                                             "final_duration": final_duration,
+                                                                                             "final_distance": final_distance,
+                                                                                             "destination_country": country,
+                                                                                             "result": result}})
+                                    continue
+
+
                     else:
-                        directions = None
                         index_v = 0
+                        directions = None
+
                         while directions == None and index_v < 2:
                             # get largest border and conflict cities for directions.
                             largest_border_country_city = get_camp_city(country, index_v)
@@ -368,159 +378,82 @@ if __name__ == "__main__":
                             )
                             print('done with directions')
                             if directions:
-                                print('directions found ', country)
-                                # set crossing data to city as last case ?
-                                crossing_data = {
-                                    "latitude": largest_border_country_city["latitude"],
-                                    "longitude": largest_border_country_city["longitude"],
-                                    "country": largest_border_country_city['country'],
-                                }
-                                for idx, i in enumerate(directions[0]["legs"][0]["steps"]):
-                                    instr = i["html_instructions"]
-                                    if "Entering" in instr:
-                                        print('Found entering')
-                                        country_split = instr.split("Entering")[1].split("<")[0]
+                                total_duration = 0
+                                total_distance = 0
+                                final_ind = None
+                                for idx, i in enumerate(directions[0]['legs'][0]['steps']):
+                                    total_duration = total_duration + i["duration"]["value"]
+                                    total_distance = total_distance + i["distance"]["value"]
+                                    instr = i['html_instructions']
+                                    if 'Entering' in instr:
+                                        country_split = instr.split('Entering')[1].split("<")[0]
                                         ratio = fuzz.ratio(country_split, country)
                                         if ratio > 80:
-                                            crossing_data = {
-                                                "latitude": i["end_location"]["lat"],
-                                                "longitude": i["end_location"]["lng"],
-                                                "country": f"{country}",
-                                            }
+                                            final_ind = idx
+                                            final_duration = total_duration
+                                            final_distance = total_distance
+                                            conflict_city_to_haven_crossings.append(
+                                                {conflict["#name"]: {"final_ind": final_ind,
+                                                                 "final_duration": final_duration,
+                                                                 "final_distance": final_distance,
+                                                                 "destination_country": country,
+                                                                 "result": directions}})
+                                            continue
 
-                                if crossing_data:
-                                    crossing_locations_df = crossing_locations.append(crossing_data)
-
-                                index_v += 1
+                            index_v += 1
                 except Exception as e:
                     print(e)
                     traceback.print_exc()
 
-            if run_with_haven_cities:
-                for kk, camp in camps.iterrows():
-                    try:
-                        result = gmaps.directions(
-                            f'{conflict["#name"]}, {conflict["country"]}',
-                            f'{camp["#name"]}, {camp["country"]}',
-                            mode="driving",
-                        )
-                        if result:
-                            for idx, i in enumerate(result[0]["legs"][0]["steps"]):
-                                instr = i["html_instructions"]
-                                if "Entering" in instr:
-                                    country_split = instr.split("Entering")[1].split("<")[0]
-                                    ratio = fuzz.ratio(country_split, camp["country"])
-                                    if ratio > 80:
-                                        crossing_data = {
-                                            "latitude": i["end_location"]["lat"],
-                                            "longitude": i["end_location"]["lng"],
-                                            "country": f"{camp['country']}",
-                                        }
-                                        if crossing_data not in crossing_locations:
-                                            crossing_locations.append(crossing_data)
-                    except Exception as e:
-                        traceback.print_exc()
 
-
-        crossing_locations_df = pd.DataFrame(
-            crossing_locations, columns=["latitude", "longitude", "country"]
-        )
-
-        # city=get_city("Eritrea",0)
-        for touching_country in touching_list:
-            if touching_country in crossing_locations_df['country'].values:
-                pass
-            else:
-                print(touching_country, 'touching country border crossing missing')
-                directions = None
-                index_v = 0
-                while directions == None and index_v < 2:
-                    # get largest border and conflict cities for directions.
-                    largest_border_country_city = get_camp_city(touching_country, index_v)
-                    largest_conflict_country_city = get_conflict_city(conflict_country, index_v)
-
-                    directions = gmaps.directions(
-                        f'{largest_conflict_country_city["#name"]}, {largest_conflict_country_city["country"]}',
-                        f'{largest_border_country_city["#name"]}, {largest_border_country_city["country"]}',
-                        mode=flight_mode,
-                    )
-                    print('done with directions')
-                    if directions:
-                        crossing_data=None
-                        print('directions found ', touching_country)
-                        # set crossing data to city as last case ?
-                        for idx, i in enumerate(directions[0]["legs"][0]["steps"]):
-                            instr = i["html_instructions"]
-                            if "Entering" in instr:
-                                print('Found entering')
-                                country_split = instr.split("Entering")[1].split("<")[0]
-                                ratio = fuzz.ratio(country_split, touching_country)
-                                if ratio > 80:
-                                    crossing_data = {
-                                        "latitude": i["end_location"]["lat"],
-                                        "longitude": i["end_location"]["lng"],
-                                        "country": f"{touching_country}",
-                                    }
-
-                        if crossing_data:
-                            crossing_locations_df = crossing_locations_df.append(crossing_data, ignore_index=True)
-
-                        index_v += 1
-
-        crossing_locations_df.to_csv(f'outputs/{conflict_country}_border_crossings.csv')
-        # get conflict exit routes
-        conflict_exit_routes = {}
-        NoneType = type(None)
+        conflicts_longest_duration_values = {}
+        longest_duration = 0
         for kk, conflict in conflicts.iterrows():
-            closest_crossing, crossing_val = get_closest(
-                conflict.latitude,
-                conflict.longitude,
-                crossing_locations_df,
-                flight_mode,
-                attraction_weight,
-                attractions=attractions,
-                gmaps=gmaps,
-            )
 
-            if isinstance(closest_crossing, type(None)):
-                print(f'{conflict["#name"]} No routes found')
-            conflict_exit_routes[conflict["#name"]] = dict(
-                crossing=closest_crossing, crossing_v=crossing_val
-            )
-        for kk, vv in conflict_exit_routes.items():
-            if not isinstance(vv["crossing"], type(None)):
-                vv["crossing"] = dict(vv["crossing"])
+            for vv in conflict_city_to_haven_crossings:
+                key = vv.keys()
+                if conflict["#name"] in key:
+                    duration = vv[conflict["#name"]]['final_duration']
+                    if duration > longest_duration:
+                        longest_duration = duration
+                else:
+                    pass
+            conflicts_longest_duration_values[conflict["#name"]] = longest_duration
 
-        with open(
-            f"outputs/{conflict_country}_exit_routes_{flight_mode}.json", "w"
-        ) as f:
-            f.write(json.dumps(conflict_exit_routes, cls=NpEncoder))
 
-        # get directions to closes routes
         all_directions = {}
-        for kk, conflict in conflicts.iterrows():
-            conflict_name = conflict["#name"]
-            print(f"Getting directions for conflict: {conflict_name}")
 
-            if conflict_name in conflict_exit_routes:
-                try:
-                    xing = conflict_exit_routes[conflict_name]["crossing"]
-                    try:
-                        directions_result = gmaps.directions(
-                            (conflict.latitude, conflict.longitude),
-                            (xing["latitude"], xing["longitude"]),
-                            mode=flight_mode,
-                        )
-                        directions_result[0]["name"] = xing["country"]
-                        directions_result[0]["country"] = xing["country"]
-                    except Exception as e:
-                        print(e)
-                        traceback.print_exc()
-                        directions_result = None
-                    all_directions[conflict_name] = directions_result
-                except Exception as e:
-                    print(e)
-                    traceback.print_exc()
+        for kk, conflict in conflicts.iterrows():
+            try:
+                shortest_location = None
+                shortest_seconds = 100000000000
+                final_index_=None
+                for kk, vv in enumerate(conflict_city_to_haven_crossings):
+                    key = vv.keys()
+                    if conflict["#name"] in key:
+                        duration = vv[conflict["#name"]]['final_duration']
+                        country_ = vv[conflict["#name"]]['destination_country']
+
+                        country, ratio, idx = process.extractOne(country_, attractions["country"])
+
+                        attraction = attractions[
+                            attractions["country"] == country
+                        ].predicted_shares.iloc[0]
+
+                        seconds = (duration / conflicts_longest_duration_values[conflict["#name"]]) * (
+                                    1 - attraction_weight) + (1 / math.sqrt(attraction)) * attraction_weight
+                        if seconds < shortest_seconds:
+                            shortest_seconds = seconds
+                            final_index_ = kk
+
+                    else:
+                        pass
+
+                all_directions[conflict['#name']] = conflict_city_to_haven_crossings[final_index_][conflict["#name"]]
+            except Exception as e:
+                traceback.print_exc()
+                print(e)
+
         with open(
             f"outputs/{conflict_country}_border_crossing_directions_{flight_mode}.json",
             "w",
@@ -554,16 +487,24 @@ if __name__ == "__main__":
         # plot crossings
         map = folium.Map(location=[conflicts.latitude.mean(), conflicts.longitude.mean()], zoom_start=6)
 
-        for i, crossing in crossing_locations_df.iterrows():
-            crossing_m = folium.Marker(
-                [crossing["latitude"], crossing["longitude"]],
-                popup=f'{crossing["country"]}_crossing',
-                icon=folium.Icon(
-                    icon="glyphicon glyphicon-road",
-                    color=country_colors[crossing["country"]],
-                ),
-            )
-            crossing_m.add_to(map)
+        for kk, conflict in conflicts.iterrows():
+            for crossing in conflict_city_to_haven_crossings:
+
+                key = crossing.keys()
+                if conflict["#name"] in key:
+                    lat = crossing[conflict["#name"]]["result"][0]['legs'][0]['steps'][
+                        crossing[conflict["#name"]]["final_ind"]]['end_location']['lat']
+                    lng = crossing[conflict["#name"]]["result"][0]['legs'][0]['steps'][
+                        crossing[conflict["#name"]]["final_ind"]]['end_location']['lng']
+                    crossing_m = folium.Marker(
+                        [lat, lng],
+                        popup=f'{crossing[conflict["#name"]]["destination_country"]}_crossing',
+                        icon=folium.Icon(
+                            icon="glyphicon glyphicon-road",
+                            color=country_colors[crossing[conflict["#name"]]['destination_country']],
+                        ),
+                    )
+                    crossing_m.add_to(map)
         # Plot conflict starting points
         for kk, start in conflicts.iterrows():
             start_m = folium.Marker(
@@ -576,29 +517,44 @@ if __name__ == "__main__":
         if "driving" in flight_mode:
             fg_d = folium.FeatureGroup("Driving")
             for kk, vv in all_directions.items():
-                stroke = int(conflicts[conflicts["#name"] == kk]["stroke"])
-                population = "{:,}".format(
-                    int(conflicts[conflicts["#name"] == kk]["population"])
-                )
-                directions = all_directions[kk]
+                stroke = int(conflicts[conflicts['#name'] == kk]['stroke'])
+                population = "{:,}".format(int(conflicts[conflicts['#name'] == kk]['population']))
+                directions = all_directions[kk]['result'][0]
                 if not isinstance(directions, type(None)):
-                    distance = directions[0]["legs"][0]["distance"]["text"]
-                    duration = directions[0]["legs"][0]["duration"]["text"]
-                    end_location = directions[0]["name"]
+                    distance = all_directions[kk]['final_distance']
+                    duration = all_directions[kk]['final_duration']
+                    end_location = all_directions[kk]['destination_country']
+                    final_ind = all_directions[kk]["final_ind"]
 
                     end_country = end_location
-                    tooltip = (
-                        f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by car is <b>"
-                        f"{distance}</b> and takes <b>{duration}</b>.</br></br>"
-                        f"<b>{population}</b> people are effected by this conflict."
-                    )
-                    polyline_ = polyline.decode(
-                        directions[0]["overview_polyline"]["points"]
-                    )
-                    polyline_m = folium.PolyLine(
-                        polyline_, color="#4A89F3", tooltip=tooltip, weight=stroke
-                    )
-                    polyline_m.add_to(fg_d)
+                    tooltip = f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by car is <b>" \
+                              f"{distance}</b> and takes <b>{duration}</b>.</br></br>" \
+                              f"<b>{population}</b> people are effected by this conflict."
+                    for step in directions['legs'][0]['steps'][0:final_ind + 1]:
+                        polyline_ = polyline.decode(step['polyline']['points'])
+                        polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
+                        polyline_m.add_to(fg_d)
+            fg_d.add_to(map)
+        if 'walking' in flight_mode:
+            fg_d = folium.FeatureGroup("Walking")
+            for kk, vv in all_directions.items():
+                stroke = int(conflicts[conflicts['#name']==kk]['stroke'])
+                population = "{:,}".format(int(conflicts[conflicts['#name']==kk]['population']))
+                directions = all_directions[kk]['result'][0]
+                if not isinstance(directions, type(None)):
+                    distance = all_directions[kk]['final_distance']
+                    duration = all_directions[kk]['final_duration']
+                    end_location = all_directions[kk]['destination_country']
+                    final_ind = all_directions[kk]["final_ind"]
+
+                    end_country = end_location
+                    tooltip = f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by walking is <b>" \
+                              f"{distance}</b> and takes <b>{duration}</b>.</br></br>" \
+                              f"<b>{population}</b> people are effected by this conflict."
+                    for step in directions['legs'][0]['steps'][0:final_ind + 1]:
+                        polyline_ = polyline.decode(step['polyline']['points'])
+                        polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
+                        polyline_m.add_to(fg_d)
             fg_d.add_to(map)
         if "walking" in flight_mode:
             fg_w = folium.FeatureGroup("Walking")
@@ -609,28 +565,23 @@ if __name__ == "__main__":
                 )
                 directions = all_directions[kk]
                 if not isinstance(directions, type(None)):
-                    distance = directions[0]["legs"][0]["distance"]["text"]
-                    duration = directions[0]["legs"][0]["duration"]["text"]
-                    end_location = directions[0]["name"]
-
-                    end_country = end_location
+                    distance = all_directions[kk]['final_distance']
+                    duration = all_directions[kk]['final_duration']
+                    end_location = all_directions[kk]['destination_country']
+                    end_country=end_location
+                    final_ind = all_directions[kk]["final_ind"]
                     tooltip = (
                         f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by foot is <b>"
                         f"{distance}</b> and takes <b>{duration}</b>.</br></br>"
                         f"<b>{population}</b> people are effected by this conflict."
                     )
-                    polyline_ = polyline.decode(
-                        directions[0]["overview_polyline"]["points"]
-                    )
-                    polyline_m = folium.PolyLine(
-                        polyline_, color="#4A89F3", tooltip=tooltip, weight=stroke
-                    )
-                    polyline_m.add_to(fg_w)
+                    for step in directions['legs'][0]['steps'][0:final_ind + 1]:
+                        polyline_ = polyline.decode(step['polyline']['points'])
+                        polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
+                        polyline_m.add_to(fg_w)
             fg_w.add_to(map)
 
-
-        # plot exit routes (transit)
-        if "transit" in flight_mode and run_with_haven_cities:
+        if "transit" in flight_mode:
             fg_t = folium.FeatureGroup("Transit")
             for kk, vv in all_directions.items():
                 stroke = int(conflicts[conflicts["#name"] == kk]["stroke"])
@@ -639,27 +590,23 @@ if __name__ == "__main__":
                 )
                 directions = all_directions[kk]
                 if not isinstance(directions, type(None)):
-                    if len(directions) > 0:
-                        distance = directions[0]["legs"][0]["distance"]["text"]
-                        duration = directions[0]["legs"][0]["duration"]["text"]
-                        end_location = directions[0]["name"]
-                        end_country = camps[
-                            camps["#name"] == end_location
-                        ].country.values[0]
-                        tooltip = (
-                            f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by transit is <b>"
-                            f"{distance}</b> and takes <b>{duration}</b>.</br></br>"
-                            f"<b>{population}</b> people are effected by this conflict."
-                        )
-                        polyline_ = polyline.decode(
-                            directions[0]["overview_polyline"]["points"]
-                        )
-                        polyline_m = folium.PolyLine(
-                            polyline_, color="#7570b3", tooltip=tooltip, weight=stroke
-                        )
+                    distance = all_directions[kk]['final_distance']
+                    duration = all_directions[kk]['final_duration']
+                    end_location = all_directions[kk]['destination_country']
+                    end_country = end_location
+                    final_ind = all_directions[kk]["final_ind"]
+                    tooltip = (
+                        f"Travel between <b>{kk}</b> and <b>{end_location}, {end_country}</b> by foot is <b>"
+                        f"{distance}</b> and takes <b>{duration}</b>.</br></br>"
+                        f"<b>{population}</b> people are effected by this conflict."
+                    )
+                    for step in directions['legs'][0]['steps'][0:final_ind + 1]:
+                        polyline_ = polyline.decode(step['polyline']['points'])
+                        polyline_m = folium.PolyLine(polyline_, color='#4A89F3', tooltip=tooltip, weight=stroke)
                         polyline_m.add_to(fg_t)
-
             fg_t.add_to(map)
+        # plot exit routes (transit)
+
 
         basemaps["Google Satellite Hybrid"].add_to(map)
         # basemaps['Esri Satellite'].add_to(map)
@@ -677,7 +624,7 @@ if __name__ == "__main__":
         # Calculate Recipient Country Refugee Counts
         conflicts = locations[locations["location_type"] == "conflict_zone"]
         conflicts = conflicts.apply(
-            lambda row: get_exit_route(row, flight_mode, conflict_exit_routes), axis=1
+            lambda row: get_exit_route(row, flight_mode, all_directions), axis=1
         )
 
         border_countries = border_countries_results.copy()
