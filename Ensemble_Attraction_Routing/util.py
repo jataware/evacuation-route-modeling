@@ -159,14 +159,14 @@ def add_legend(map):
     return map
 
 
-def get_exit_route(row, mode, conflict_exit_routes):
+def get_exit_route(row, mode, all_directions):
     lat=None
     lng=None
     dest=None
     try:
-        dest = conflict_exit_routes[row['#name']]['crossing']['country']
-        lat = conflict_exit_routes[row['#name']]['crossing']['latitude']
-        lng = conflict_exit_routes[row['#name']]['crossing']['longitude']
+        dest = all_directions[row['#name']]['destination_country']
+        lat = all_directions[row['#name']]["result"][0]['legs'][0]['steps'][all_directions[row['#name']]["final_ind"]]['end_location']['lat']
+        lng = all_directions[row['#name']]["result"][0]['legs'][0]['steps'][all_directions[row['#name']]["final_ind"]]['end_location']['lng']
     except Exception as e:
         print(e)
         dest = None
