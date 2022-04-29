@@ -3,10 +3,11 @@
   "conflict_country":"Mali",
   "flight_mode":"driving",
   "conflict_start":2023,
-  "number_haven_cities":1,
-  "number_conflict_cities":15,
+  "number_haven_cities":5,
+  "number_conflict_cities":20,
   "drop_missing_data":false,
-  "added_countries":[],
-  "excluded_countries":[],
-  "percent_of_pop_leaving": 0.1
+  "added_countries":"None",
+  "excluded_countries":"None",
+  "percent_of_pop_leaving": 0.1,
+  "attraction_weight":0.2
 }
