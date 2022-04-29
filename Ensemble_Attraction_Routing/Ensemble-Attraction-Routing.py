@@ -53,6 +53,7 @@ if __name__ == "__main__":
             excluded_countries=""
         if added_countries =="None":
             added_countries=""
+        conflict_start_year = config.get("conflict_start", 2021)
         conflict_start = config.get("conflict_start", 2021)
         if conflict_start >2021:
             conflict_start=2021
@@ -619,7 +620,7 @@ if __name__ == "__main__":
         conflicts[f"refugee_estimated_leaving_via_{flight_mode}"] = conflicts[
             "pop_percent_of_conflict_cities"
         ] * (conflict_country_historic_pop * percent_of_pop_leaving)
-        conflicts['conflict_year'] = conflict_start
+        conflicts['conflict_year'] = conflict_start_year
 
         # reduce size of output file
         COL = ["#name", "country", "conflict_year", f"{flight_mode}_destination", "latitude", "longitude",
