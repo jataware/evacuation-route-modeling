@@ -13,6 +13,8 @@ With those duration values we determine which of the haven countries each confli
 We gathered historic data on democratic conditions within each haven country one year prior to the conflict from V-Dem, including their liberal democracy index (v2x_libdem). We collect historic GDP from World Bank. 
 The model is a simple linear regression uses these two features normalized by all the haven countries. The output is the attraction score. 
 
+If you want to make sure you have the latest data you can run the setup.sh file with the flag -d. This will download and clean the latest Liberal Democracy Index,World Bank Population, and GDP data. At of May 2, 2022 the data is as up to date as possible.  
+
 ## Running the model
 To run the model you will need a google api key. Once you have your google api key follow these steps:
 1. Clone this repo.
