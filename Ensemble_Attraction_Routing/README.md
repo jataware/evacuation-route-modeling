@@ -51,7 +51,7 @@ Here is an example.
 
 ## Outputs
 There are a few output files from a model run. These will be found in the outputs/ folder.
-The first one is {conflict_country}_{flight_mode}_output_results.csv. In my example run it would be Ukraine_Driving_output_results.csv. This file has each country's GDP, Liberal Democracy, historic population and Attraction Score (predicted_shares).  Next is the {conflict_country}_{flight_mode}_total_refugee.csv file which has each conflict city's predicted number of refugees, lat and long of border crossing and the associated destination country. Lastly, there is {conflict_country}_{flight_mode}_total_refugee_by_country.csv which has each haven country and the predicted number of refugees.
+The first one is {conflict_country}_{flight_mode}_output_results.csv. In my example run it would be Ukraine_driving_output_results.csv. This file has each country's GDP, Liberal Democracy, historic population and Attraction Score (predicted_shares).  Next is the {conflict_country}_{flight_mode}_total_refugee.csv file which has each conflict city's predicted number of refugees, lat and long of border crossing and the associated destination country. Lastly, there is {conflict_country}_{flight_mode}_total_refugee_by_country.csv which has each haven country and the predicted number of refugees.
 All json files that are outputed are data on directions and duration times.
 ### Maps
 Each model run has an output map. This map should plot each conflict city, each border crossing found, and the route chosen from each conflict city given the conditions. For the example it looks like this. 
