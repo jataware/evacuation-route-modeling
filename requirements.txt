@@ -1,4 +1,5 @@
 folium
+pandas
 geopandas
 googlemaps
 haversine
@@ -6,3 +7,8 @@ pgeocode
 polyline
 shapely
 matplotlib
+numpy
+fuzzywuzzy
+shapely
+sklearn
+statsmodels
